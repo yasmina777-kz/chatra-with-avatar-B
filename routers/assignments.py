@@ -18,14 +18,14 @@ router = APIRouter(tags=["Assignments"])
 
 
 def _check_assignment_org(db: Session, assignment, current_user):
-    """404 если задание принадлежит классу другой организации."""
+
     cls = db.query(ClassModel).filter(ClassModel.id == assignment.class_id).first()
     if cls and cls.org_type != current_user.org_type:
         raise HTTPException(status_code=404, detail="Assignment not found")
 
 
 def _check_submission_org(db: Session, submission, current_user):
-    """404 если submission принадлежит классу другой организации."""
+
     from models import Assignment
     assignment = db.query(Assignment).filter(Assignment.id == submission.assignment_id).first()
     if assignment:
@@ -34,9 +34,7 @@ def _check_submission_org(db: Session, submission, current_user):
             raise HTTPException(status_code=404, detail="Submission not found")
 
 
-# ════════════════════════════════════════════════════════
-#  ЗАДАНИЯ
-# ════════════════════════════════════════════════════════
+
 
 @router.post(
     "/assignments/",
@@ -92,7 +90,7 @@ def my_rating(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Return the student's average score (0-100 scale) based on graded submissions."""
+
     from sqlalchemy import text as sqlt
     try:
         if class_id:
@@ -173,9 +171,7 @@ def delete_assignment(
     crud.delete_assignment(db, assignment_id)
 
 
-# ════════════════════════════════════════════════════════
-#  ВАРИАНТЫ ЗАДАНИЙ
-# ════════════════════════════════════════════════════════
+
 
 @router.get(
     "/assignments/{assignment_id}/variants",
@@ -186,7 +182,7 @@ def list_variants(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Список всех вариантов задания с эталонными решениями."""
+
     obj = crud.get_assignment(db, assignment_id)
     if not obj:
         raise HTTPException(status_code=404, detail="Assignment not found")
@@ -228,7 +224,7 @@ def delete_variant(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_teacher),
 ):
-    """Удалить вариант задания."""
+
     if not crud_classes.delete_variant(db, variant_id):
         raise HTTPException(status_code=404, detail="Variant not found")
 

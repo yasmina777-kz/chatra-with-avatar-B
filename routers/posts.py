@@ -20,7 +20,7 @@ def _get_post_or_404(db: Session, post_id: int) -> Posts:
 
 
 def _check_post_org(db: Session, post: Posts, current_user) -> None:
-    """404 если пост создан пользователем другой организации."""
+
     creator = db.query(User).filter(User.id == post.user_id).first()
     if not creator or creator.org_type != current_user.org_type:
         raise HTTPException(status_code=404, detail="Post not found")

@@ -1,11 +1,4 @@
-"""
-Клиент ElevenLabs: клонирование голоса учителя (Instant Voice Cloning)
-и синтез речи (TTS) готовым клонированным голосом.
 
-Ключ берётся из переменной окружения ELEVENLABS_API_KEY.
-Если ключ не задан — функции поднимают VoiceServiceNotConfigured,
-роутеры превращают это в понятную ошибку 503 для фронтенда.
-"""
 import logging
 import os
 from uuid import uuid4
@@ -40,10 +33,7 @@ def _api_key() -> str:
 
 
 async def clone_voice_from_sample(voice_name: str, sample_bytes: bytes, sample_filename: str) -> str:
-    """
-    Клонирует голос учителя по образцу записи (Instant Voice Cloning).
-    Возвращает voice_id, который дальше используется для синтеза речи.
-    """
+
     api_key = _api_key()
 
     files = {"files": (sample_filename, sample_bytes, "audio/mpeg")}
@@ -70,10 +60,7 @@ async def clone_voice_from_sample(voice_name: str, sample_bytes: bytes, sample_f
 
 
 async def synthesize_speech(text: str, voice_id: str | None = None) -> tuple[bytes, str]:
-    """
-    Озвучивает текст указанным (клонированным) голосом.
-    Возвращает (audio_bytes, content_type).
-    """
+
     api_key = _api_key()
     voice = voice_id or DEFAULT_VOICE_ID
 
@@ -105,7 +92,7 @@ async def synthesize_speech(text: str, voice_id: str | None = None) -> tuple[byt
 
 
 def save_audio_file(audio_bytes: bytes, prefix: str = "narration") -> str:
-    """Сохраняет аудио на диск и возвращает публичный URL."""
+
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     filename = f"{prefix}_{uuid4().hex}.mp3"
     path = os.path.join(UPLOAD_DIR, filename)

@@ -265,15 +265,9 @@ class ProcessedDocument(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
-# ──────────────────────────────────────────────────────────────────
-#  AI-аватар преподавателя (читает лекции)
-# ──────────────────────────────────────────────────────────────────
 
 class TeacherAvatar(Base):
-    """
-    Один аватар на учителя. Создаётся один раз: фото + образец голоса.
-    Требует одобрения админа (затратная фича — голос/видео платные).
-    """
+
     __tablename__ = "teacher_avatars"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -308,10 +302,7 @@ class TeacherAvatar(Base):
 
 
 class AvatarLecture(Base):
-    """
-    Лекция, начитанная аватаром по презентации/документу учителя.
-    Каждая новая лекция требует одобрения админа (расходует платные минуты/символы).
-    """
+
     __tablename__ = "avatar_lectures"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)

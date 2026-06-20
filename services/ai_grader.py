@@ -93,7 +93,7 @@ def _build_user_prompt(
 
 
 def _parse_docx(data: bytes) -> str:
-    """Читает docx через python-docx — сохраняет абзацы, заголовки и таблицы."""
+
     try:
         from docx import Document
         doc = Document(io.BytesIO(data))
@@ -122,7 +122,7 @@ def _parse_docx(data: bytes) -> str:
         return result[:25000] if result else ""
 
     except Exception:
-        # Fallback — старый способ через regex если python-docx не сработал
+
         try:
             with zipfile.ZipFile(io.BytesIO(data)) as z:
                 texts = []
@@ -152,11 +152,11 @@ async def _fetch_file_text(url: str) -> str:
             ext = raw_ext[-1].lower() if len(raw_ext) > 1 else ""
             content_type = resp.headers.get("content-type", "").lower()
 
-            # ── DOCX (главный формат) ─────────────────────────────────────────
+
             if ext == "docx" or "wordprocessingml" in content_type:
                 return _parse_docx(resp.content)
 
-            # ── PDF ───────────────────────────────────────────────────────────
+
             elif ext == "pdf" or "pdf" in content_type:
                 try:
                     import pdfplumber
@@ -174,7 +174,7 @@ async def _fetch_file_text(url: str) -> str:
                     except Exception as e:
                         return f"[PDF — не удалось прочитать: {e}]"
 
-            # ── PPTX / XLSX ───────────────────────────────────────────────────
+
             elif ext in ("pptx", "xlsx"):
                 try:
                     with zipfile.ZipFile(io.BytesIO(resp.content)) as z:
@@ -193,15 +193,15 @@ async def _fetch_file_text(url: str) -> str:
                 except Exception as e:
                     return f"[{ext.upper()} — не удалось прочитать: {e}]"
 
-            # ── Текстовые форматы ─────────────────────────────────────────────
+
             elif ext in ("txt", "md", "csv", "tsv", "log", "json", "xml", "yaml", "yml"):
                 return resp.content.decode("utf-8", errors="ignore")[:20000]
 
-            # ── Изображения ───────────────────────────────────────────────────
+
             elif ext in ("png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"):
                 return "[Изображение — текст недоступен]"
 
-            # ── Всё остальное ─────────────────────────────────────────────────
+
             else:
                 try:
                     decoded = resp.content.decode("utf-8", errors="ignore")
@@ -226,7 +226,7 @@ async def grade_submission(
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY не задан. Добавь в .env файл.")
 
-    # ── Собираем текст студента ───────────────────────────────────────────────
+
     parts = []
     if text and text.strip():
         parts.append(text.strip())
@@ -240,7 +240,7 @@ async def grade_submission(
 
     student_text = "\n\n".join(parts) if parts else "[Студент не предоставил ответа]"
 
-    # ── Собираем эталон ───────────────────────────────────────────────────────
+
     all_ref_urls: list = []
     if reference_solution_urls:
         all_ref_urls.extend(reference_solution_urls)
@@ -257,7 +257,7 @@ async def grade_submission(
         if ref_parts:
             reference_text = "\n\n---\n\n".join(ref_parts)
 
-    # ── Запрос к ИИ ───────────────────────────────────────────────────────────
+
     payload = {
         "model": OPENAI_MODEL,
         "messages": [

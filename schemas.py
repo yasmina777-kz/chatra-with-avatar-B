@@ -241,9 +241,7 @@ class StudentRatingResponse(BaseModel):
     ratings: List[StudentRatingEntry]
 
 
-# ──────────────────────────────────────────────────────────────────
-#  AI-аватар преподавателя
-# ──────────────────────────────────────────────────────────────────
+
 
 class TeacherAvatarCreate(BaseModel):
     display_name: Optional[str] = None
@@ -277,7 +275,7 @@ class AvatarLectureCreate(BaseModel):
     source_file_url: str
     source_filename: Optional[str] = None
     duration_minutes: int = 40
-    style: str = "university"   # school | university | professional
+    style: str = "university"
     auto_summary: bool = True
 
 

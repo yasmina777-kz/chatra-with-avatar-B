@@ -1,15 +1,4 @@
-"""
-Генерация текста лекции аватара по слайдам презентации/документа.
 
-Учитель указывает:
-  - желаемую длительность лекции (в минутах) — выбирается самим учителем
-  - стиль объяснения: school | university | professional
-  - нужен ли автоматический итоговый конспект
-
-ИИ распределяет общее время речи по слайдам пропорционально объёму
-содержания каждого слайда и пишет связный текст рассказа для каждого слайда,
-а также (если запрошено) финальный конспект по всей лекции.
-"""
 import json
 import logging
 import os
@@ -20,7 +9,7 @@ logger = logging.getLogger(__name__)
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 OPENAI_MODEL = "gpt-4o-mini"
 
-# Среднее количество слов в минуту при спокойной речи преподавателя
+
 WORDS_PER_MINUTE = 130
 
 STYLE_PROMPTS = {
@@ -76,7 +65,7 @@ async def _chat(messages: list[dict], max_tokens: int = 4000, temperature: float
 
 
 def _distribute_seconds(slide_texts: list[str], total_seconds: int) -> list[int]:
-    """Делит общее время лекции по слайдам пропорционально объёму текста на слайде."""
+
     weights = [max(len(t), 30) for t in slide_texts]
     total_weight = sum(weights) or 1
     seconds = [max(int(total_seconds * w / total_weight), 15) for w in weights]
@@ -89,10 +78,7 @@ async def generate_lecture_narration(
     style: str,
     lecture_title: str,
 ) -> list[str]:
-    """
-    Возвращает список текстов рассказа — один на каждый слайд,
-    суммарно рассчитанный на duration_minutes речи.
-    """
+
     style_instruction = STYLE_PROMPTS.get(style, STYLE_PROMPTS["university"])
     total_words = duration_minutes * WORDS_PER_MINUTE
     seconds_per_slide = _distribute_seconds(slide_texts, duration_minutes * 60)
@@ -134,7 +120,7 @@ async def generate_lecture_narration(
 
 
 async def generate_lecture_summary(narrations: list[str], lecture_title: str, style: str) -> str:
-    """Финальный конспект по теме лекции — для студентов, в конце урока."""
+
     style_instruction = STYLE_PROMPTS.get(style, STYLE_PROMPTS["university"])
     full_text = "\n\n".join(narrations)
 
@@ -189,11 +175,7 @@ def estimate_total_chars(narrations: list[str]) -> int:
 
 
 def estimate_cost_usd(total_chars: int, intro_video_seconds: int = 20) -> float:
-    """
-    Грубая прикидка стоимости для отображения админу при модерации.
-    ElevenLabs overage ~ $0.30 / 1000 символов (тариф Creator) как верхняя оценка.
-    D-ID: видео только интро, ~$4/мин сверх лимита плана (ориентировочно).
-    """
+
     voice_cost = (total_chars / 1000) * 0.30
     video_cost = (intro_video_seconds / 60) * 4.0
     return round(voice_cost + video_cost, 2)

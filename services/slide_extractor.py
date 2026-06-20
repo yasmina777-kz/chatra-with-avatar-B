@@ -1,14 +1,4 @@
-"""
-Извлечение "слайдов" из материалов лекции (PPTX или PDF).
 
-Каждый слайд = (текст для ИИ-промпта, картинка для показа на фронтенде).
-Картинки слайдов рендерятся через LibreOffice (если доступен в окружении)
-и сохраняются в UPLOAD_DIR, чтобы фронтенд мог их показать в плеере лекции.
-
-Если LibreOffice недоступен — слайды всё равно извлекаются (текст из python-pptx
-или pypdf), просто без картинок; фронтенд в этом случае покажет только аватара
-без фона слайда.
-"""
 import io
 import logging
 import os
@@ -78,7 +68,7 @@ def _extract_pptx_text(data: bytes) -> list[str]:
                     row_text = " | ".join(c.text.strip() for c in row.cells if c.text.strip())
                     if row_text:
                         parts.append(row_text)
-        # заметки докладчика — тоже полезный контекст для ИИ
+
         try:
             if slide.has_notes_slide and slide.notes_slide.notes_text_frame:
                 notes = slide.notes_slide.notes_text_frame.text.strip()
@@ -128,18 +118,13 @@ def _soffice_available() -> bool:
 
 
 def _resolve_executable(name: str) -> str:
-    """На Windows shutil.which иногда не находит .exe по чистому имени из PATH
-    при запуске из дочернего процесса uvicorn — ищем явно."""
+
     found = shutil.which(name) or shutil.which(name + ".exe")
     return found or name
 
 
 def _render_slide_images(data: bytes, filename: str, count: int) -> list[str]:
-    """
-    Конвертирует presentation/pdf -> PDF (если нужно) -> PNG для каждой страницы,
-    через LibreOffice + pdftoppm. Возвращает публичные URL картинок.
-    Если соответствующие бинарники недоступны — возвращает [].
-    """
+
     if not _soffice_available():
         logger.warning("LibreOffice (soffice) не найден в PATH — рендер слайдов в картинки пропущен")
         return []
@@ -176,7 +161,7 @@ def _render_slide_images(data: bytes, filename: str, count: int) -> list[str]:
                 logger.error("soffice превысил таймаут конвертации в PDF")
                 return []
 
-            # LibreOffice сохраняет результат с тем же базовым именем, что у входного файла
+
             candidates = list(Path(tmpdir).glob("*.pdf"))
             if not candidates:
                 logger.warning("LibreOffice не создал PDF для %s (файлы в tmpdir: %s)",

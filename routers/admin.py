@@ -217,11 +217,7 @@ def get_ai_usage_summary(
     ]
 
 
-# ──────────────────────────────────────────────────────────────────
-#  Модерация AI-аватаров преподавателей и лекций
-#  (создание аватара и каждой новой лекции — затратные операции,
-#   поэтому требуют явного одобрения админа)
-# ──────────────────────────────────────────────────────────────────
+
 
 @router.get("/avatars", response_model=List[schemas.TeacherAvatarResponse])
 def list_avatars(
@@ -258,10 +254,7 @@ async def review_avatar(
         db.refresh(avatar)
         return avatar
 
-    # Одобрено -> пытаемся клонировать голос учителя по образцу.
-    # Если клонирование недоступно (нет ключа, нет платного тарифа, ошибка сети) —
-    # всё равно одобряем аватара, но он будет говорить стандартным голосом ElevenLabs,
-    # пока администратор не подключит/не обновит тариф.
+
     voice_warning = None
     try:
         import httpx
@@ -352,7 +345,7 @@ def review_avatar_lecture(
     db.commit()
     db.refresh(lecture)
 
-    # Генерация текста/аудио/видео — долгая, запускаем в фоне, чтобы не держать запрос админа
+
     background_tasks.add_task(run_lecture_generation, lecture.id, current_user.org_type)
 
     return lecture

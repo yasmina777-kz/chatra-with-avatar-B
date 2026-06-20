@@ -76,11 +76,9 @@ def _validate_file_content(content: bytes, ext: str) -> bool:
     if ext in ("doc", "xls", "ppt"):
         return content[:4] == b"\xd0\xcf\x11\xe0"
     if ext in AUDIO_VIDEO_EXTENSIONS:
-        # Аудио/видео контейнеры сильно различаются по магическим байтам в зависимости
-        # от кодека и браузера, который их записал (особенно webm из MediaRecorder),
-        # поэтому здесь не блокируем по содержимому — достаточно проверки расширения.
+
         return True
-    # Для остальных форматов не проверяем magic bytes
+
     return True
 
 

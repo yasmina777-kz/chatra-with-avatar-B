@@ -1,15 +1,4 @@
-"""
-Оркестрация полного пайплайна генерации лекции аватара, запускается
-ПОСЛЕ одобрения админом (фоновой задачей FastAPI BackgroundTasks).
 
-Шаги:
- 1. Извлечь слайды из закреплённого файла (текст + картинки) — на этапе создания лекции уже сделано
- 2. Сгенерировать текст рассказа для каждого слайда (OpenAI), под нужную длительность/стиль
- 3. Озвучить каждый слайд клонированным голосом учителя (ElevenLabs)
- 4. Сгенерировать короткое видео-интро аватара по первому аудио-фрагменту (D-ID), если настроен
- 5. Если включено — сгенерировать итоговый конспект
- 6. Обновить статус лекции на ready / failed
-"""
 import logging
 
 from sqlalchemy.orm import Session
@@ -20,15 +9,11 @@ from services import elevenlabs_client, did_client, lecture_generator
 
 logger = logging.getLogger(__name__)
 
-INTRO_VIDEO_SLIDE_INDEX = 0  # видео-интро рендерится только для первого слайда
+INTRO_VIDEO_SLIDE_INDEX = 0
 
 
 async def run_lecture_generation(lecture_id: int, org_type: str = "university") -> None:
-    """
-    Запускается в фоне (FastAPI BackgroundTasks) после одобрения лекции админом.
-    Открывает свою собственную Session, так как Session из исходного HTTP-запроса
-    к этому моменту уже закрыта.
-    """
+
     db: Session = get_session_for_org(org_type)
     try:
         lecture = db.query(AvatarLecture).filter(AvatarLecture.id == lecture_id).first()
@@ -94,7 +79,7 @@ async def run_lecture_generation(lecture_id: int, org_type: str = "university") 
 
         db.commit()
 
-        # Видео-интро только для первого слайда, чтобы не сжигать бюджет D-ID
+
         if avatar and avatar.photo_url and first_audio_url:
             try:
                 video_url = await did_client.create_talking_intro(
