@@ -1,4 +1,3 @@
-
 import logging
 from typing import List, Optional
 
@@ -17,6 +16,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/avatars", tags=["Teacher Avatars"])
 
 ALLOWED_STYLES = {"school", "university", "professional"}
+
+# Допустимые голоса Azure (валидируем выбор преподавателя)
+ALLOWED_VOICES = {
+    "ru-RU-DmitryNeural",
+    "ru-RU-SvetlanaNeural",
+    "ru-RU-DariyaNeural",
+}
+DEFAULT_VOICE = "ru-RU-DmitryNeural"
 
 
 @router.get("/me", response_model=Optional[schemas.TeacherAvatarResponse])
@@ -41,10 +48,15 @@ def create_my_avatar(
             detail="У вас уже есть аватар или заявка на рассмотрении.",
         )
 
+    # Голос Azure: берём выбранный, с валидацией и запасным значением
+    voice = (body.voice or DEFAULT_VOICE)
+    if voice not in ALLOWED_VOICES:
+        voice = DEFAULT_VOICE
+
     if existing:
         existing.display_name = body.display_name or current_user.full_name
         existing.photo_url = body.photo_url
-        existing.voice_sample_url = body.voice_sample_url
+        existing.elevenlabs_voice_id = voice        # поле переиспользуем под имя голоса Azure
         existing.status = "pending"
         existing.rejection_reason = None
         existing.reviewed_by = None
@@ -58,7 +70,7 @@ def create_my_avatar(
         org_type=current_user.org_type,
         display_name=body.display_name or current_user.full_name,
         photo_url=body.photo_url,
-        voice_sample_url=body.voice_sample_url,
+        elevenlabs_voice_id=voice,                  # поле переиспользуем под имя голоса Azure
         status="pending",
     )
     db.add(avatar)

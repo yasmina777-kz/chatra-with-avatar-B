@@ -11,7 +11,6 @@ from db import get_db
 from crud import users as crud_users
 from security import hash_password
 from typing import Optional, List
-from services import elevenlabs_client
 from services.avatar_lecture_pipeline import run_lecture_generation
 
 logger = logging.getLogger(__name__)
@@ -254,37 +253,11 @@ async def review_avatar(
         db.refresh(avatar)
         return avatar
 
-
-    voice_warning = None
-    try:
-        import httpx
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            sample_resp = await client.get(avatar.voice_sample_url)
-        if not sample_resp.is_success:
-            voice_warning = "Не удалось скачать образец голоса для клонирования"
-        else:
-            voice_id = await elevenlabs_client.clone_voice_from_sample(
-                voice_name=avatar.display_name or f"teacher_{avatar.teacher_id}",
-                sample_bytes=sample_resp.content,
-                sample_filename="sample.mp3",
-            )
-            avatar.elevenlabs_voice_id = voice_id
-    except elevenlabs_client.VoiceServiceNotConfigured as exc:
-        logger.warning("ElevenLabs не настроен при одобрении аватара %s: %s", avatar_id, exc)
-        voice_warning = "Ключ ElevenLabs не настроен — аватар будет говорить стандартным голосом"
-    except elevenlabs_client.VoiceServiceError as exc:
-        logger.warning("Клонирование голоса недоступно для аватара %s: %s", avatar_id, exc)
-        voice_warning = (
-            "Клонирование голоса недоступно на текущем тарифе ElevenLabs "
-            "(нужен платный план Starter и выше) — аватар будет говорить стандартным голосом"
-        )
-    except Exception as exc:
-        logger.exception("Непредвиденная ошибка клонирования голоса для аватара %s", avatar_id)
-        voice_warning = f"Не удалось клонировать голос ({exc}) — аватар будет говорить стандартным голосом"
-
+    # Клонирование голоса больше не нужно: голос выбирается преподавателем (Azure)
+    # и уже лежит в avatar.elevenlabs_voice_id. Просто одобряем.
     avatar.status = "approved"
     avatar.rejection_reason = None
-    avatar.voice_clone_warning = voice_warning
+    avatar.voice_clone_warning = None
     db.commit()
     db.refresh(avatar)
     return avatar

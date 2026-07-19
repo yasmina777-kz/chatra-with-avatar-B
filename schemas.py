@@ -246,7 +246,8 @@ class StudentRatingResponse(BaseModel):
 class TeacherAvatarCreate(BaseModel):
     display_name: Optional[str] = None
     photo_url: str
-    voice_sample_url: str
+    # Голос Azure (имя голоса), напр. "ru-RU-DmitryNeural".
+    voice: str = "ru-RU-DmitryNeural"
 
 
 class TeacherAvatarResponse(BaseModel):
@@ -254,7 +255,8 @@ class TeacherAvatarResponse(BaseModel):
     teacher_id: int
     display_name: Optional[str] = None
     photo_url: Optional[str] = None
-    voice_sample_url: Optional[str] = None
+    # имя выбранного голоса Azure (хранится в поле elevenlabs_voice_id)
+    voice: Optional[str] = None
     status: str
     rejection_reason: Optional[str] = None
     voice_clone_warning: Optional[str] = None
@@ -305,6 +307,7 @@ class AvatarLectureResponse(BaseModel):
     error_message: Optional[str] = None
     summary_text: Optional[str] = None
     intro_video_url: Optional[str] = None
+    outro_video_url: Optional[str] = None
     estimated_chars: int = 0
     estimated_cost_usd: float = 0
     created_at: datetime

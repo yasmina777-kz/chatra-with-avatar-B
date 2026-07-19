@@ -1,11 +1,10 @@
-
 import logging
 
 from sqlalchemy.orm import Session
 
 from db import get_session_for_org
 from models import AvatarLecture, AvatarLectureSlide, TeacherAvatar
-from services import elevenlabs_client, did_client, lecture_generator
+from services import azure_client as tts_client, wav2lip_client, lecture_generator
 
 logger = logging.getLogger(__name__)
 
@@ -57,40 +56,68 @@ async def run_lecture_generation(lecture_id: int, org_type: str = "university") 
         for slide, narration in zip(slides, narrations):
             slide.narration_text = narration
 
+        # Голос Azure: имя голоса хранится в поле avatar.elevenlabs_voice_id
+        voice_name = avatar.elevenlabs_voice_id if avatar else None
+
+        last_index = len(slides) - 1
         first_audio_url = None
+        last_audio_url = None
+
         for i, slide in enumerate(slides):
             text = (slide.narration_text or "").strip()
             if not text:
                 continue
             try:
-                audio_bytes, _ctype = await elevenlabs_client.synthesize_speech(
+                audio_bytes, _ctype = await tts_client.synthesize_speech(
                     text=text,
-                    voice_id=avatar.elevenlabs_voice_id if avatar else None,
+                    voice_id=voice_name,
                 )
-                audio_url = elevenlabs_client.save_audio_file(audio_bytes, prefix=f"lecture{lecture.id}_slide{i}")
+                audio_url = tts_client.save_audio_file(audio_bytes, prefix=f"lecture{lecture.id}_slide{i}")
                 slide.audio_url = audio_url
                 if i == INTRO_VIDEO_SLIDE_INDEX:
                     first_audio_url = audio_url
-            except elevenlabs_client.VoiceServiceNotConfigured as exc:
-                logger.warning("ElevenLabs не настроен, слайд %s остаётся без аудио: %s", i, exc)
-            except Exception as exc:
+                if i == last_index:
+                    last_audio_url = audio_url
+            except tts_client.VoiceServiceNotConfigured as exc:
+                logger.warning("Azure TTS не настроен, слайд %s остаётся без аудио: %s", i, exc)
+            except Exception:
                 logger.exception("Ошибка озвучки слайда %s лекции %s", i, lecture_id)
                 slide.audio_url = None
 
         db.commit()
 
+        # avatar.photo_url теперь может содержать ВИДЕО преподавателя (Wav2Lip принимает и видео, и фото).
 
+        # 1) Говорящее видео-вступление (первый слайд)
         if avatar and avatar.photo_url and first_audio_url:
             try:
-                video_url = await did_client.create_talking_intro(
-                    photo_url=avatar.photo_url,
-                    audio_url=first_audio_url,
+                intro_url = await wav2lip_client.generate_talking_video(
+                    face=avatar.photo_url,
+                    audio=first_audio_url,
                 )
-                lecture.intro_video_url = video_url
-            except did_client.VideoServiceNotConfigured as exc:
-                logger.info("D-ID не настроен, видео-интро пропущено: %s", exc)
+                lecture.intro_video_url = intro_url
+            except wav2lip_client.Wav2LipError as exc:
+                logger.info("Wav2Lip недоступен, видео-интро пропущено: %s", exc)
             except Exception:
                 logger.exception("Ошибка генерации видео-интро лекции %s", lecture_id)
+
+        # 2) Говорящее видео-концовка (последний слайд) — только если он не совпадает со вступлением
+        if (
+            avatar
+            and avatar.photo_url
+            and last_audio_url
+            and last_audio_url != first_audio_url
+        ):
+            try:
+                outro_url = await wav2lip_client.generate_talking_video(
+                    face=avatar.photo_url,
+                    audio=last_audio_url,
+                )
+                lecture.outro_video_url = outro_url
+            except wav2lip_client.Wav2LipError as exc:
+                logger.info("Wav2Lip недоступен, видео-концовка пропущена: %s", exc)
+            except Exception:
+                logger.exception("Ошибка генерации видео-концовки лекции %s", lecture_id)
 
         if lecture.auto_summary:
             try:

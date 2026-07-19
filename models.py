@@ -332,6 +332,7 @@ class AvatarLecture(Base):
 
     summary_text: Mapped[str] = mapped_column(Text, nullable=True)
     intro_video_url: Mapped[str] = mapped_column(String, nullable=True)
+    outro_video_url: Mapped[str] = mapped_column(String, nullable=True)
 
     estimated_chars: Mapped[int] = mapped_column(Integer, default=0)
     estimated_cost_usd: Mapped[float] = mapped_column(Integer, default=0)

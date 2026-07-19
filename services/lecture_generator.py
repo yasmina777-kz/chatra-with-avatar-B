@@ -1,7 +1,7 @@
-
 import json
 import logging
 import os
+import re
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,12 @@ def _api_key() -> str:
     return key
 
 
-async def _chat(messages: list[dict], max_tokens: int = 4000, temperature: float = 0.6) -> str:
+async def _chat(
+    messages: list[dict],
+    max_tokens: int = 4000,
+    temperature: float = 0.6,
+    json_mode: bool = False,
+) -> str:
     api_key = _api_key()
     payload = {
         "model": OPENAI_MODEL,
@@ -47,6 +52,10 @@ async def _chat(messages: list[dict], max_tokens: int = 4000, temperature: float
         "max_tokens": max_tokens,
         "temperature": temperature,
     }
+    if json_mode:
+        # Принуждаем модель вернуть валидный JSON-объект
+        payload["response_format"] = {"type": "json_object"}
+
     async with httpx.AsyncClient(timeout=120.0) as client:
         resp = await client.post(
             OPENAI_URL,
@@ -102,9 +111,11 @@ async def generate_lecture_narration(
         "3. Соблюдай целевую длительность для каждого слайда (она указана в словах).\n"
         "4. Между слайдами должна быть логическая связность (используй переходные фразы типа "
         "«теперь перейдём к...», «как мы только что разобрали...»).\n"
-        "5. Ответь СТРОГО в формате JSON-массива строк, без пояснений: "
-        '["текст рассказа слайда 1", "текст рассказа слайда 2", ...]\n'
-        f"Массив должен содержать ровно {len(slide_texts)} элементов."
+        "5. Не используй обратные слэши, пути к файлам и спецсимволы — текст читается вслух, "
+        "поэтому пиши словами (например, вместо «\\n» скажи «новая строка»).\n"
+        "6. Ответь СТРОГО в виде JSON-объекта вида: "
+        '{"narrations": ["текст рассказа слайда 1", "текст рассказа слайда 2", ...]}\n'
+        f"Массив narrations должен содержать ровно {len(slide_texts)} элементов."
     )
 
     content = await _chat(
@@ -113,6 +124,7 @@ async def generate_lecture_narration(
             {"role": "user", "content": slides_block},
         ],
         max_tokens=min(4096, 300 + len(slide_texts) * 220),
+        json_mode=True,
     )
 
     narrations = _parse_json_array(content, expected_len=len(slide_texts))
@@ -143,19 +155,55 @@ async def generate_lecture_summary(narrations: list[str], lecture_title: str, st
     return content.strip()
 
 
+def _fix_bad_escapes(s: str) -> str:
+    """Экранирует одиночные обратные слэши, которые не являются валидной JSON-escape."""
+    return re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', s)
+
+
 def _parse_json_array(content: str, expected_len: int) -> list[str]:
     text = content.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.startswith("json"):
-            text = text[4:]
-    text = text.strip()
 
-    try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError as exc:
-        logger.error("Не удалось распарсить JSON ответа модели: %s\nОтвет: %s", exc, text[:500])
+    # снимаем markdown-обёртку ```json ... ```
+    text = re.sub(r"^```(?:json)?\s*", "", text)
+    text = re.sub(r"\s*```$", "", text).strip()
+
+    def _try(s: str):
+        try:
+            return json.loads(s)
+        except json.JSONDecodeError:
+            return None
+
+    parsed = _try(text)
+
+    # попытка 2: чиним невалидные escape-последовательности (пути вида C:\Users, \n и т.п.)
+    if parsed is None:
+        parsed = _try(_fix_bad_escapes(text))
+
+    # попытка 3: вырезаем объект {...} или массив [...] по скобкам
+    if parsed is None:
+        for open_ch, close_ch in (("{", "}"), ("[", "]")):
+            start, end = text.find(open_ch), text.rfind(close_ch)
+            if start != -1 and end != -1 and end > start:
+                candidate = text[start:end + 1]
+                parsed = _try(candidate) or _try(_fix_bad_escapes(candidate))
+                if parsed is not None:
+                    break
+
+    if parsed is None:
+        logger.error("Не удалось распарсить JSON ответа модели. Ответ: %s", text[:500])
         raise LectureGenerationError("ИИ вернул некорректный формат ответа, попробуйте снова")
+
+    # поддерживаем и {"narrations": [...]}, и просто [...]
+    if isinstance(parsed, dict):
+        for key in ("narrations", "slides", "texts", "result", "data"):
+            if isinstance(parsed.get(key), list):
+                parsed = parsed[key]
+                break
+        else:
+            # если в объекте одно единственное поле-список — берём его
+            lists = [v for v in parsed.values() if isinstance(v, list)]
+            if len(lists) == 1:
+                parsed = lists[0]
 
     if not isinstance(parsed, list):
         raise LectureGenerationError("ИИ вернул не массив текстов слайдов")
