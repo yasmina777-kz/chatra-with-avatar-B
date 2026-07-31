@@ -56,8 +56,11 @@ async def run_lecture_generation(lecture_id: int, org_type: str = "university") 
         for slide, narration in zip(slides, narrations):
             slide.narration_text = narration
 
-        # Голос Azure: имя голоса хранится в поле avatar.elevenlabs_voice_id
-        voice_name = avatar.elevenlabs_voice_id if avatar else None
+        # Голос Azure: подбираем под язык материала, сохраняя пол выбранного голоса
+        preferred_voice = avatar.elevenlabs_voice_id if avatar else None
+        lang = lecture_generator.detect_language(slide_texts)
+        voice_name = lecture_generator.voice_for_language(lang, preferred_voice)
+        logger.info("Лекция %s: язык материала=%s, голос=%s", lecture_id, lang, voice_name)
 
         last_index = len(slides) - 1
         first_audio_url = None

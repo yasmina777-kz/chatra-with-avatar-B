@@ -22,6 +22,7 @@ ALLOWED_EXTENSIONS = {
     "png", "jpg", "jpeg", "gif", "webp",
     "zip", "rar", "sm",
     "mp3", "wav", "m4a", "webm", "ogg", "mp4",
+    "vrm", "glb",          # 3D-модели аватара (VRM = контейнер glTF)
 }
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 
@@ -38,11 +39,14 @@ MAGIC_BYTES: dict = {
     b"\x1f\x8b":         "gz",
     b"\x49\x44\x33":     "mp3",
     b"\x1a\x45\xdf\xa3": "webm",
+    b"\x67\x6c\x54\x46": "glb/vrm",
 }
 
 
 TEXT_EXTENSIONS = {"txt", "md", "csv", "rtf", "sm"}
 AUDIO_VIDEO_EXTENSIONS = {"mp3", "wav", "m4a", "webm", "ogg", "mp4"}
+# бинарные форматы, которые нет смысла парсить как документ
+BINARY_EXTENSIONS = {"vrm", "glb"} | AUDIO_VIDEO_EXTENSIONS | {"png", "jpg", "jpeg", "gif", "webp", "zip", "rar"}
 
 def _validate_file_content(content: bytes, ext: str) -> bool:
 
@@ -75,6 +79,9 @@ def _validate_file_content(content: bytes, ext: str) -> bool:
         return content[:4] == b"\x50\x4b\x03\x04"
     if ext in ("doc", "xls", "ppt"):
         return content[:4] == b"\xd0\xcf\x11\xe0"
+    if ext in ("vrm", "glb"):
+        # VRM/GLB — бинарный glTF, файл начинается с "glTF"
+        return content[:4] == b"\x67\x6c\x54\x46"
     if ext in AUDIO_VIDEO_EXTENSIONS:
 
         return True
@@ -127,6 +134,7 @@ async def upload_file(
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
 
-    parsed = read_file(file_path)
+    # бинарные файлы (3D-модели, медиа) не парсим как документ
+    parsed = None if ext in BINARY_EXTENSIONS else read_file(file_path)
     file_url = f"{APP_BASE_URL.rstrip('/')}/uploads/{unique_filename}"
     return JSONResponse(content={"file_url": file_url, "filename": file.filename, "parsed": parsed})

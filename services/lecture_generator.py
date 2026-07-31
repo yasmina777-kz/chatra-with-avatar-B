@@ -32,6 +32,42 @@ class LectureGenerationError(Exception):
     pass
 
 
+LANG_NAMES = {"ru": "русском", "en": "английском", "kk": "казахском"}
+
+# Голоса Azure по языкам (мужской, женский)
+VOICES_BY_LANG = {
+    "ru": ("ru-RU-DmitryNeural", "ru-RU-SvetlanaNeural"),
+    "en": ("en-US-GuyNeural", "en-US-JennyNeural"),
+    "kk": ("kk-KZ-DauletNeural", "kk-KZ-AigulNeural"),
+}
+
+
+def detect_language(texts: list[str]) -> str:
+    """Определяет язык материала лекции: ru / en / kk."""
+    sample = " ".join(texts)[:4000]
+    letters = [c for c in sample if c.isalpha()]
+    if not letters:
+        return "ru"
+    cyr = sum(1 for c in letters if "\u0400" <= c <= "\u04FF")
+    lat = sum(1 for c in letters if "a" <= c.lower() <= "z")
+    if lat > cyr:
+        return "en"
+    # специфические казахские буквы
+    if any(c in sample.lower() for c in "әғқңөұүһі"):
+        return "kk"
+    return "ru"
+
+
+def voice_for_language(lang: str, preferred_voice: str | None) -> str:
+    """Подбирает голос Azure под язык. Сохраняет пол из выбранного преподавателем голоса."""
+    male, female = VOICES_BY_LANG.get(lang, VOICES_BY_LANG["ru"])
+    if preferred_voice and preferred_voice.startswith(f"{lang}-"):
+        return preferred_voice          # уже нужный язык — оставляем выбор препода
+    female_markers = ("Svetlana", "Dariya", "Jenny", "Aigul", "Aria")
+    is_female = bool(preferred_voice) and any(m in preferred_voice for m in female_markers)
+    return female if is_female else male
+
+
 def _api_key() -> str:
     key = os.getenv("OPENAI_API_KEY", "")
     if not key:
@@ -89,6 +125,8 @@ async def generate_lecture_narration(
 ) -> list[str]:
 
     style_instruction = STYLE_PROMPTS.get(style, STYLE_PROMPTS["university"])
+    lang = detect_language(slide_texts)
+    lang_name = LANG_NAMES.get(lang, "русском")
     total_words = duration_minutes * WORDS_PER_MINUTE
     seconds_per_slide = _distribute_seconds(slide_texts, duration_minutes * 60)
 
@@ -105,6 +143,7 @@ async def generate_lecture_narration(
         "который раскрывает содержимое слайда. " + style_instruction + "\n\n"
         f"Тема лекции: «{lecture_title}». Общая длительность лекции — примерно {duration_minutes} минут "
         f"(~{total_words} слов суммарно по всем слайдам).\n\n"
+        f"ЯЗЫК: пиши рассказ на {lang_name} языке — том же, на котором написан материал слайдов.\n\n"
         "ВАЖНЫЕ ПРАВИЛА:\n"
         "1. Пиши ТОЛЬКО то, что будет произнесено голосом — без заголовков, маркеров списков, markdown.\n"
         "2. Не повторяй текст слайда буквально — объясняй его своими словами, как живой рассказ.\n"
@@ -135,13 +174,25 @@ async def generate_lecture_summary(narrations: list[str], lecture_title: str, st
 
     style_instruction = STYLE_PROMPTS.get(style, STYLE_PROMPTS["university"])
     full_text = "\n\n".join(narrations)
+    lang = detect_language(narrations)
+    lang_name = LANG_NAMES.get(lang, "русском")
 
     system_prompt = (
-        "Ты — преподаватель. По тексту прочитанной лекции составь краткий, но содержательный "
-        "конспект для студентов: ключевые определения, формулы/факты, основные выводы. "
+        "Ты — преподаватель. По тексту прочитанной лекции составь ПОДРОБНЫЙ учебный конспект, "
+        "по которому студент сможет подготовиться к экзамену, не пересматривая лекцию. "
         + style_instruction + "\n\n"
-        "Формат: Markdown с заголовками и списками. Конспект должен помещаться на 1-2 экрана — "
-        "не пересказывай лекцию целиком, выдели только главное."
+        f"ЯЗЫК: пиши конспект на {lang_name} языке.\n\n"
+        "СТРУКТУРА (обязательно):\n"
+        "1. Краткое введение — о чём лекция и зачем это нужно (2-3 предложения).\n"
+        "2. Разделы по темам лекции с заголовками (##). В каждом разделе:\n"
+        "   - развёрнутое объяснение сути своими словами;\n"
+        "   - **все ключевые определения** выделены жирным;\n"
+        "   - формулы, правила, классификации — списками;\n"
+        "   - конкретные примеры из лекции.\n"
+        "3. «Главное к запоминанию» — маркированный список ключевых тезисов.\n"
+        "4. «Вопросы для самопроверки» — 5-7 вопросов по материалу.\n\n"
+        "Не сокращай до тезисов — конспект должен быть самодостаточным и подробным, "
+        "с пояснениями, а не просто перечнем пунктов. Формат: Markdown."
     )
 
     content = await _chat(
@@ -149,7 +200,7 @@ async def generate_lecture_summary(narrations: list[str], lecture_title: str, st
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Тема: {lecture_title}\n\nТекст лекции:\n{full_text[:14000]}"},
         ],
-        max_tokens=1200,
+        max_tokens=3500,
         temperature=0.4,
     )
     return content.strip()

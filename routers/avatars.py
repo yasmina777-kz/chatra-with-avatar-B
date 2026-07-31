@@ -22,6 +22,10 @@ ALLOWED_VOICES = {
     "ru-RU-DmitryNeural",
     "ru-RU-SvetlanaNeural",
     "ru-RU-DariyaNeural",
+    "en-US-GuyNeural",
+    "en-US-JennyNeural",
+    "kk-KZ-DauletNeural",
+    "kk-KZ-AigulNeural",
 }
 DEFAULT_VOICE = "ru-RU-DmitryNeural"
 
@@ -57,6 +61,7 @@ def create_my_avatar(
         existing.display_name = body.display_name or current_user.full_name
         existing.photo_url = body.photo_url
         existing.elevenlabs_voice_id = voice        # поле переиспользуем под имя голоса Azure
+        existing.voice_sample_url = body.vrm_url     # поле переиспользуем под ссылку на .vrm
         existing.status = "pending"
         existing.rejection_reason = None
         existing.reviewed_by = None
@@ -71,12 +76,22 @@ def create_my_avatar(
         display_name=body.display_name or current_user.full_name,
         photo_url=body.photo_url,
         elevenlabs_voice_id=voice,                  # поле переиспользуем под имя голоса Azure
+        voice_sample_url=body.vrm_url,              # поле переиспользуем под ссылку на .vrm
         status="pending",
     )
     db.add(avatar)
     db.commit()
     db.refresh(avatar)
     return avatar
+
+
+
+def _attach_avatar_media(lecture: AvatarLecture) -> AvatarLecture:
+    """Подкладывает в объект лекции ссылки аватара (фото и .vrm) для ответа фронту."""
+    av = lecture.avatar
+    lecture.avatar_photo_url = av.photo_url if av else None
+    lecture.avatar_vrm_url = av.voice_sample_url if av else None
+    return lecture
 
 
 def _get_approved_avatar_or_404(db: Session, teacher_id: int) -> TeacherAvatar:
@@ -182,7 +197,7 @@ def list_class_lectures(
     )
     if current_user.role == "student":
         q = q.filter(AvatarLecture.status == "ready")
-    return q.order_by(AvatarLecture.created_at.desc()).all()
+    return [_attach_avatar_media(l) for l in q.order_by(AvatarLecture.created_at.desc()).all()]
 
 
 @router.get("/lectures/{lecture_id}/full", response_model=schemas.AvatarLectureFullResponse)
@@ -201,7 +216,7 @@ def get_lecture_full(
     if current_user.role == "teacher" and not is_owner and lecture.status != "ready":
         raise HTTPException(status_code=404, detail="Лекция не найдена")
 
-    return lecture
+    return _attach_avatar_media(lecture)
 
 
 @router.delete("/lectures/{lecture_id}", status_code=status.HTTP_204_NO_CONTENT)
