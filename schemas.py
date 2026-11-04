@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, EmailStr
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Literal
 from datetime import datetime
 
 class UserCreate(BaseModel):
@@ -11,6 +11,11 @@ class UserCreate(BaseModel):
     org_type: str = "university"
 
     model_config = ConfigDict(from_attributes=True)
+
+class UserRegister(UserCreate):
+    # Public signup must not accept roles reserved for administrators.
+    role: Literal["student", "teacher"]
+
 
 class UserResponse(BaseModel):
     id: int

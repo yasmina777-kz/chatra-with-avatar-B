@@ -38,7 +38,7 @@ def get_groups(q: str = ""):
 
 
 @router.post("/register", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
-def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
+def register(user: schemas.UserRegister, db: Session = Depends(get_db)):
     org_type = user.org_type if user.org_type in ("university", "school") else "university"
     existing = crud_users.get_user_by_email(db, user.email, org_type)
     if existing:
